@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tarea 2.2 - Dos texturas</title>
+    <style>
+        #controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            display: inline-block;
+        }
+
+        #controls div {
+            display: flex;
+            justify-content: center;
+        }
+
+        .smallButton {
+            width: 50px;
+            height: 50px;
+            margin: 3px;
+            font-size: 18px;
+            cursor: pointer;
+            background-color: rgba(255, 255, 255, 0.5);
+            border: none;
+            border-radius: 10px;
+        }
+
+        button:hover {
+            background-color: rgba(255, 255, 255, 0.8);
+        }
+
+        .reset {
+            width: 156px;
+            height: 50px;
+            margin: 3px;
+            font-size: 18px;
+            cursor: pointer;
+            background-color: rgba(255, 255, 255, 0.5);
+            border: none;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="canvas" width="700" height="700"></canvas>
+    <div id="controls">
+        <div>
+            <button class="smallButton" onclick="zoomIn()">+</button>
+            <button class="smallButton" onclick="up()">↑</button>
+            <button class="smallButton" onclick="zoomOut()">-</button>
+        </div>
+        <div>
+            <button class="smallButton" onclick="left()">←</button>
+            <button class="smallButton" onclick="down()">↓</button>
+            <button class="smallButton" onclick="right()">→</button>
+        </div>
+        <div>
+            <button class="reset" onclick="reset()">Reset</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.4.0/gl-matrix.js"></script>
+    <script>
+        var canvas = document.getElementById('canvas');
+        var gl = canvas.getContext('webgl');
+
+        // Cámara
+        var radius = 20;
+        var theta = Math.PI / 2;
+        var phi = 0.0;
+
+        var targetRadius = radius;
+        var targetTheta = theta;
+        var targetPhi = phi;
+
+        function up() {
+            targetPhi += 0.1;
+            if (targetPhi > Math.PI / 2) targetPhi = Math.PI / 2;
+        }
+
+        function down() {
+            targetPhi -= 0.1;
+            if (targetPhi < -Math.PI / 2) targetPhi = -Math.PI / 2;
+        }
+
+        function left() {
+            targetTheta -= 0.1;
+        }
+
+        function right() {
+            targetTheta += 0.1;
+        }
+
+        function zoomIn() {
+            targetRadius = Math.max(2, targetRadius - 0.5);
+        }
+
+        function zoomOut() {
+            targetRadius += 0.5;
+        }
+
+        function reset() {
+            radius = 20; theta = Math.PI / 2; phi = 0.0;
+            targetRadius = radius; targetTheta = theta; targetPhi = phi;
+        }
+
+        function Cylinder(radius = 1, height = 2, radialSegments = 36) {
+            var positionsSide = [], texSide = [], indicesSide = [];
+
+            // Side
+            for (let i = 0; i <= radialSegments; i++) {
+                var th = (i / radialSegments) * Math.PI * 2;
+                var x = Math.cos(th) * radius, z = Math.sin(th) * radius;
+                positionsSide.push(x, -height / 2, z); texSide.push(i / radialSegments, 1.0);
+                positionsSide.push(x, height / 2, z); texSide.push(i / radialSegments, 0.0);
+            }
+            for (let i = 0; i < radialSegments; i++) {
+                var a = i * 2, b = a + 1, c = a + 2, d = a + 3;
+                indicesSide.push(a, b, c); indicesSide.push(b, d, c);
+            }
+
+            // Caps (top and bottom)
+            function makeCap(y, flip) {
+                var positions = [0, y, 0], tex = [0.5, 0.5], indices = [];
+                for (let i = 0; i <= radialSegments; i++) {
+                    var th = (i / radialSegments) * Math.PI * 2;
+                    var x = Math.cos(th) * radius, z = Math.sin(th) * radius;
+                    positions.push(x, y, z);
+                    tex.push(0.5 + 0.5 * Math.cos(th), 0.5 + 0.5 * Math.sin(th));
+                }
+                for (let i = 1; i <= radialSegments; i++) {
+                    var next = (i % radialSegments) + 1;
+                    if (!flip) indices.push(0, i, next); else indices.push(0, next, i);
+                }
+                return { positions, tex, indices };
+            }
+
+            var top = makeCap(height / 2, false), bottom = makeCap(-height / 2, true);
+            return {
+                side: { positions: new Float32Array(positionsSide), tex: new Float32Array(texSide), indices: new Uint16Array(indicesSide) },
+                top: { positions: new Float32Array(top.positions), tex: new Float32Array(top.tex), indices: new Uint16Array(top.indices) },
+                bottom: { positions: new Float32Array(bottom.positions), tex: new Float32Array(bottom.tex), indices: new Uint16Array(bottom.indices) }
+            };
+        }
+
+        var cylindre = Cylinder(1, 2, 64);
+        var side = cylindre.side, topCap = cylindre.top, bottomCap = cylindre.bottom;
+
+        function makeVAO(positions, texcoords, indices) {
+            if (!positions || !texcoords || !indices) {
+                console.error("Error VAO, datos faltantes", { positions, texcoords, indices });
+                return null;
+            }
+            var vao = {};
+            vao.positionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, vao.positionBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+
+            vao.texBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, vao.texBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, texcoords, gl.STATIC_DRAW);
+
+            vao.indexBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vao.indexBuffer);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+
+            vao.numElements = indices.length;
+            return vao;
+        }
+
+        var sideVAO = makeVAO(side.positions, side.tex, side.indices);
+        var topVAO = makeVAO(topCap.positions, topCap.tex, topCap.indices);
+        var bottomVAO = makeVAO(bottomCap.positions, bottomCap.tex, bottomCap.indices);
+
+        // Shaders
+        var vertCode = `
+            attribute vec3 position;
+            attribute vec2 texCoord;
+
+            uniform mat4 Pmatrix;
+            uniform mat4 MVmatrix;
+
+            varying vec2 vTexCoord;
+
+            void main(void){ 
+                gl_Position = Pmatrix*MVmatrix*vec4(position,1.0); vTexCoord=texCoord; 
+            }
+        `;
+
+        var fragCode = `
+            precision mediump float;
+
+            varying vec2 vTexCoord;
+
+            uniform sampler2D textura;
+
+            void main(void){ 
+                gl_FragColor = texture2D(textura,vTexCoord); 
+            }
+        `;
+
+        var program = gl.createProgram();
+
+        var vertShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vertShader, vertCode);
+        gl.compileShader(vertShader);
+
+        var fragShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fragShader, fragCode);
+        gl.compileShader(fragShader);
+
+        gl.attachShader(program, vertShader);
+        gl.attachShader(program, fragShader);
+        gl.linkProgram(program);
+        gl.useProgram(program);
+
+        // Vincular buffers y atributos
+        var MVmatrix = gl.getUniformLocation(program, 'MVmatrix');
+        var Pmatrix = gl.getUniformLocation(program, 'Pmatrix');
+        var textura = gl.getUniformLocation(program, 'textura');
+
+        var position = gl.getAttribLocation(program, 'position');
+        var texCoord = gl.getAttribLocation(program, 'texCoord');
+
+        gl.enableVertexAttribArray(position);
+        gl.enableVertexAttribArray(texCoord);
+
+        function loadTexture(url, callback) {
+            var texture = gl.createTexture();
+            var image = new Image();
+            image.onload = function () {
+                gl.bindTexture(gl.TEXTURE_2D, texture);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+                if (callback) callback();
+            };
+            image.src = url;
+            image.onerror = () => console.error("Impossible de charger la texture:", url);
+            return texture;
+        }
+
+        let texturesLoaded = 0;
+        function onTextureLoad() {
+            texturesLoaded++; if (texturesLoaded === 2) requestAnimationFrame(animate);
+        }
+        var texSide = loadTexture("side.jpg", onTextureLoad);
+        var texCap = loadTexture("cap.jpg", onTextureLoad);
+
+        // Dibujar escena
+        let timeOld = 0;
+        function animate(time) {
+            var dt = time - timeOld; timeOld = time;
+
+            var projMatrix = mat4.create();
+            mat4.perspective(projMatrix, 40 * Math.PI / 180, canvas.width / canvas.height, 1, 100);
+            gl.uniformMatrix4fv(Pmatrix, false, projMatrix);
+
+            theta += (targetTheta - theta) * 0.1;
+            phi += (targetPhi - phi) * 0.1;
+            radius += (targetRadius - radius) * 0.1;
+
+            var eye = [
+                radius * Math.cos(theta) * Math.cos(phi),
+                radius * Math.sin(phi),
+                radius * Math.sin(theta) * Math.cos(phi)
+            ];
+            var viewMatrix = mat4.create();
+            mat4.lookAt(viewMatrix, eye, [0, 0, 0], [0, 1, 0]);
+
+            var modelViewMatrix = mat4.clone(viewMatrix);
+            mat4.translate(modelViewMatrix, modelViewMatrix, [4 * Math.cos(0.001 * time), 4 * Math.sin(0.001 * time), 0]);
+            mat4.rotateZ(modelViewMatrix, modelViewMatrix, 0.001 * time + Math.PI / 2);
+            mat4.rotateY(modelViewMatrix, modelViewMatrix, 0.004 * time);
+            gl.uniformMatrix4fv(MVmatrix, false, modelViewMatrix);
+
+            gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
+            gl.clearColor(0.5, 0.5, 0.5, 0.9);
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+            function drawVAO(vao, texture) {
+                if (!vao) return;
+                gl.bindBuffer(gl.ARRAY_BUFFER, vao.positionBuffer);
+                gl.vertexAttribPointer(position, 3, gl.FLOAT, false, 0, 0);
+                gl.bindBuffer(gl.ARRAY_BUFFER, vao.texBuffer);
+                gl.vertexAttribPointer(texCoord, 2, gl.FLOAT, false, 0, 0);
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vao.indexBuffer);
+                gl.bindTexture(gl.TEXTURE_2D, texture);
+                gl.activeTexture(gl.TEXTURE0);
+                gl.uniform1i(textura, 0);
+                gl.drawElements(gl.TRIANGLES, vao.numElements, gl.UNSIGNED_SHORT, 0);
+            }
+
+            drawVAO(sideVAO, texSide);
+            drawVAO(topVAO, texCap);
+            drawVAO(bottomVAO, texCap);
+
+            requestAnimationFrame(animate);
+        }
+
+        // Controles de teclado
+        document.addEventListener("keydown", function (event) {
+            switch (event.key) {
+                case "ArrowUp": up(); break;
+                case "ArrowDown": down(); break;
+                case "ArrowLeft": left(); break;
+                case "ArrowRight": right(); break;
+                case "+": zoomIn(); break;
+                case "-": zoomOut(); break;
+            }
+        });
+    </script>
+</body>
+
+</html>
