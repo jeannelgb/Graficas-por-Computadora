@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Cubo giratorio con Babylon.js</title>
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
+  <style>
+    html, body { 
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden; 
+    }
+    canvas { 
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Botones */
+    .controls {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .row {
+      display: flex;
+      justify-content: center;
+      gap: 5px;
+    }
+    button {
+      width: 60px;
+      height: 40px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <div class="controls">
+    <div class="row"><button id="up">↑</button></div>
+    <div class="row">
+      <button id="left">←</button>
+      <button id="down">↓</button>
+      <button id="right">→</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("canvas");
+    const engine = new BABYLON.Engine(canvas, true);
+
+    const createScene = () => {
+      const scene = new BABYLON.Scene(engine);
+      scene.clearColor = new BABYLON.Color3(0.8, 0.8, 0.8);
+
+      // Camára
+      const camera = new BABYLON.ArcRotateCamera("camera", Math.PI/4, Math.PI/4, 6, BABYLON.Vector3.Zero(), scene);
+      camera.attachControl(canvas, true);
+
+      // Luz
+      const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0.5, 1, 0.5), scene);
+
+      const box = BABYLON.MeshBuilder.CreateBox("box", { size: 2 }, scene);
+      const mat = new BABYLON.StandardMaterial("mat", scene);
+      mat.diffuseColor = new BABYLON.Color3(1, 0, 0);
+      box.material = mat;
+
+      const rotationStep = 0.05;
+
+      // Deplazamiento con teclado
+      window.addEventListener("keydown", (event) => {
+        switch(event.key) {
+          case "ArrowUp": box.rotation.x -= rotationStep; break;
+          case "ArrowDown": box.rotation.x += rotationStep; break;
+          case "ArrowLeft": box.rotation.y -= rotationStep; break;
+          case "ArrowRight": box.rotation.y += rotationStep; break;
+        }
+      });
+
+      // Deplazamiento con botones
+      document.getElementById("up").addEventListener("click", () => box.rotation.x -= rotationStep);
+      document.getElementById("down").addEventListener("click", () => box.rotation.x += rotationStep);
+      document.getElementById("left").addEventListener("click", () => box.rotation.y -= rotationStep);
+      document.getElementById("right").addEventListener("click", () => box.rotation.y += rotationStep);
+
+      return scene;
+    };
+
+    const scene = createScene();
+    engine.runRenderLoop(() => scene.render());
+    window.addEventListener("resize", () => engine.resize());
+  </script>
+</body>
+</html>

@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrainement</title>
+</head>
+
+<body>
+    <canvas id="canvas" width="800" height="800"></canvas>
+
+    <script>
+        var canvas = document.getElementById('canvas');
+        var gl = canvas.getContext('webgl');
+
+        function Cylinder() {
+            var sides = 20;
+            var height = 1.0;
+            var stepTheta = 2 * Math.PI / sides;
+            var verticesPerCap = 9 * sides;
+
+            var vertices = [];
+            var theta = 0;
+            var i = 0;
+
+            // Top Cap
+            for (; i < verticesPerCap; i += 9) {
+                vertices[i] = Math.cos(theta);
+                vertices[i + 1] = height;
+                vertices[i + 2] = Math.sin(theta);
+                theta += stepTheta;
+
+                vertices[i + 3] = 0.0;
+                vertices[i + 4] = height;
+                vertices[i + 5] = 0.0;
+
+                vertices[i + 6] = Math.cos(theta);
+                vertices[i + 7] = height;
+                vertices[i + 8] = Math.sin(theta);
+            }
+
+            // Bottom Cap
+            theta = 0;
+            for (; i < verticesPerCap + verticesPerCap; i += 9) {
+                vertices[i + 6] = Math.cos(theta);
+                vertices[i + 7] = -height;
+                vertices[i + 8] = Math.sin(theta);
+                theta += stepTheta;
+
+                vertices[i + 3] = 0.0;
+                vertices[i + 4] = -height;
+                vertices[i + 5] = 0.0;
+
+                vertices[i] = Math.cos(theta);
+                vertices[i + 1] = -height;
+                vertices[i + 2] = Math.sin(theta);
+            }
+
+            for (var j = 0; j < sides; ++j) {
+                for (var k = 0; k < 3; ++k, ++i) {
+                    vertices[i] = vertices[0 + k + 9 * j];
+                }
+                for (var k = 0; k < 3; ++k, ++i) {
+                    vertices[i] = vertices[6 + k + 9 * j];
+                }
+                for (var k = 0; k < 3; ++k, ++i) {
+                    vertices[i] = vertices[verticesPerCap + k + 9 * j];
+                }
+
+                for (var k = 0; k < 3; ++k, ++i) {
+                    vertices[i] = vertices[0 + k + 9 * j];
+                }
+                for (var k = 0; k < 3; ++k, ++i) {
+                    vertices[i] = vertices[verticesPerCap + k + 9 * j];
+                }
+                for (var k = 0; k < 3; ++k, ++i) {
+                    vertices[i] = vertices[verticesPerCap + 6 + k + 9 * j];
+                }
+            }
+
+            var indices = new Array(vertices.length / 3);
+            for (i = 0; i < indices.length; ++i) indices[i] = i;
+
+            function sub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; };
+            function cross(a, b) {
+                return [
+                    a[1] * b[2] - a[2] * b[1],
+                    a[2] * b[0] - a[0] * b[2],
+                    a[0] * b[1] - a[1] * b[0]
+                ];
+            };
+            function normalize(a) {
+                var length = a[0] * a[0] + a[1] * a[1] + a[2] * a[2];
+                return [a[0] / length, a[1] / length, a[2] / length];
+            };
+
+            var normals = [];
+
+            for (var i = 0; i < vertices.length; i += 9) {
+                var a = [vertices[i], vertices[i + 1], vertices[i + 2]];
+                var b = [vertices[i + 3], vertices[i + 4], vertices[i + 5]];
+                var c = [vertices[i + 6], vertices[i + 7], vertices[i + 8]]
+                var normal = normalize(cross(sub(a, b), sub(a, c)));
+                normals = normals.concat(normal, normal, normal);
+            }
+
+            return {
+                vertices: vertices,
+                indices: indices,
+                normals: normals,
+            };
+        };
+
+        var cylindre = Cylinder();
+        var verticesCylindre = cylindre.vertices;
+        var indicesCylindre = cylindre.indices;
+        var normalsCylindre = cylindre.normals;
+
+        var colorsCylindre = [];
+        for (let i = 0; i < verticesCylindre.length; i += 1) {
+            colorsCylindre[i] = Math.random();
+        }
+
+        var verticesPyramide = [
+            //Base
+            1,-1, 1,
+           -1,-1, 1,
+           -1,-1,-1,
+            1,-1,-1,
+
+            //Face 1
+            1,-1, 1,
+           -1,-1, 1,
+            0, 1, 0,
+
+            //Face 2
+           -1,-1, 1,
+           -1,-1,-1,
+            0, 1, 0,
+
+            //Face 3
+           -1,-1,-1,
+            1,-1,-1,
+            0, 1, 0,
+
+            //Face 4
+            1,-1,-1,
+            1,-1, 1,
+            0, 1, 0,
+        ];
+
+        var indicesPyramide = [
+            //Base
+            0, 1, 2,
+            0, 2, 3,
+
+            //Face 1
+            4, 5, 6,
+
+            //Face 2
+            7, 8, 9,
+
+            //Face 3
+            10, 11, 12,
+
+            //Face 4
+            13, 14, 15,
+        ];
+
+        var colorsPyramide = [
+            //Base
+            1, 0, 0,
+            1, 0, 0,
+            1, 0, 0,
+            1, 0, 0,
+
+            //Face 1
+            1, 0, 1,
+            1, 0, 1,
+            1, 0, 1,
+
+            //Face 2
+            0, 1, 0,
+            0, 1, 0,
+            0, 1, 0,
+
+            //Face 3
+            0, 0, 1,
+            0, 0, 1,
+            0, 0, 1,
+
+            //Face 4
+            1, 1, 0,
+            1, 1, 0,
+            1, 1, 0,
+        ];
+
+        // Vertex buffer
+        var vertexBufferPyramide = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertexBufferPyramide);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verticesPyramide), gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+        var vertexBufferCylindre = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertexBufferCylindre);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verticesCylindre), gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+        // Index buffer
+        var indexBufferPyramide = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBufferPyramide);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indicesPyramide), gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+        var indexBufferCylindre = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBufferCylindre);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indicesCylindre), gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+        // Color buffer
+        var colorBufferPyramide = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, colorBufferPyramide);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colorsPyramide), gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+        var colorBufferCylindre = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, colorBufferCylindre);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colorsCylindre), gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+        // Shaders
+        var vertCode = `
+            attribute vec3 position;
+            attribute vec3 color;
+            uniform mat4 Pmatrix;
+            uniform mat4 Vmatrix;
+            uniform mat4 Mmatrix;
+            varying vec3 vColor;
+            void main(void) {
+                gl_Position = Pmatrix * Vmatrix * Mmatrix * vec4(position, 1.0);
+                vColor = color;
+            }
+        `;
+
+        var fragCode = `
+            precision mediump float;
+            varying vec3 vColor;
+            void main(void) {
+                gl_FragColor = vec4(vColor, 1.0);
+            }
+        `;
+
+        // Compile and link the shader program
+        var program = gl.createProgram();
+
+        var vertShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vertShader, vertCode);
+        gl.compileShader(vertShader);
+
+        var fragShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fragShader, fragCode);
+        gl.compileShader(fragShader);
+
+        gl.attachShader(program, vertShader);
+        gl.attachShader(program, fragShader);
+        gl.linkProgram(program);
+        gl.useProgram(program);
+
+        // Bind buffers and attributes
+        var Mmatrix = gl.getUniformLocation(program, 'Mmatrix');
+        var Vmatrix = gl.getUniformLocation(program, 'Vmatrix');
+        var Pmatrix = gl.getUniformLocation(program, 'Pmatrix');
+
+        var position = gl.getAttribLocation(program, 'position');
+        var color = gl.getAttribLocation(program, 'color');
+
+        gl.enableVertexAttribArray(position);
+        gl.enableVertexAttribArray(color);
+
+        function get_projection(angle, a, zMin, zMax) {
+            var ang = Math.tan((angle * .5) * Math.PI / 180);//angle*.5
+            return [
+                0.5 / ang, 0, 0, 0,
+                0, 0.5 * a / ang, 0, 0,
+                0, 0, -(zMax + zMin) / (zMax - zMin), -1,
+                0, 0, (-2 * zMax * zMin) / (zMax - zMin), 0
+            ];
+        }
+
+        projMatrix = get_projection(40, canvas.width / canvas.height, 1, 100);
+
+        viewMatrix = [
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1, 0,
+            0, 0, -6, 1
+        ];
+
+        movMatrixPyramide = [
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1
+        ];
+
+        movMatrixCylindre = [
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1
+        ];
+
+        // Movements
+        function translate(m, x, y, z) {
+            m[12] += x;
+            m[13] += y;
+            m[14] += z;
+        }
+
+        function rotateX(m, angle) {
+            var c = Math.cos(angle);
+            var s = Math.sin(angle);
+            var mv1 = m[1], mv5 = m[5], mv9 = m[9];
+
+            m[1] = m[1] * c - m[2] * s;
+            m[5] = m[5] * c - m[6] * s;
+            m[9] = m[9] * c - m[10] * s;
+
+            m[2] = m[2] * c + mv1 * s;
+            m[6] = m[6] * c + mv5 * s;
+            m[10] = m[10] * c + mv9 * s;
+        }
+
+        function rotateY(m, angle) {
+            var c = Math.cos(angle);
+            var s = Math.sin(angle);
+            var mv0 = m[0], mv4 = m[4], mv8 = m[8];
+
+            m[0] = c * m[0] + s * m[2];
+            m[4] = c * m[4] + s * m[6];
+            m[8] = c * m[8] + s * m[10];
+
+            m[2] = c * m[2] - s * mv0;
+            m[6] = c * m[6] - s * mv4;
+            m[10] = c * m[10] - s * mv8;
+        }
+
+        function rotateZ(m, angle) {
+            var c = Math.cos(angle);
+            var s = Math.sin(angle);
+            var mv0 = m[0], mv4 = m[4], mv8 = m[8];
+
+            m[0] = c * m[0] - s * m[1];
+            m[4] = c * m[4] - s * m[5];
+            m[8] = c * m[8] - s * m[9];
+
+            m[1] = c * m[1] + s * mv0;
+            m[5] = c * m[5] + s * mv4;
+            m[9] = c * m[9] + s * mv8;
+        }
+
+        // Draw scene
+        var timeOld = 0;
+        var animate = function (time) {
+            var dt = time - timeOld;
+
+            rotateX(movMatrixPyramide, dt * 0.001);
+            rotateY(movMatrixPyramide, dt * 0.0005);
+            //rotateZ(movMatrixPyramide, dt * 0.002);
+
+            //rotateX(movMatrixCylindre, dt * 0.001);
+            //rotateY(movMatrixCylindre, dt * 0.0005);
+            rotateZ(movMatrixCylindre, dt * 0.002);
+
+            timeOld = time;
+
+            gl.enable(gl.DEPTH_TEST);
+            gl.depthFunc(gl.LEQUAL);
+            gl.clearColor(0.5, 0.5, 0.5, 0.9);
+            gl.clearDepth(1.0);
+            gl.viewport(0.0, 0.0, canvas.width, canvas.height);
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+            gl.uniformMatrix4fv(Pmatrix, false, new Float32Array(projMatrix));
+            gl.uniformMatrix4fv(Vmatrix, false, new Float32Array(viewMatrix));
+            gl.uniformMatrix4fv(Mmatrix, false, new Float32Array(movMatrixPyramide));
+
+            // Pyramide
+            gl.bindBuffer(gl.ARRAY_BUFFER, vertexBufferPyramide);
+            gl.vertexAttribPointer(position, 3, gl.FLOAT, false, 0, 0);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, colorBufferPyramide);
+            gl.vertexAttribPointer(color, 3, gl.FLOAT, false, 0, 0);
+
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBufferPyramide);
+            gl.drawElements(gl.TRIANGLES, indicesPyramide.length, gl.UNSIGNED_SHORT, 0);
+
+            //Cylindre
+            //var tempCylindreMatrix = [...movMatrixCylindre];
+            translate(movMatrixCylindre, 0.05, 0.05, 0.0);
+            gl.uniformMatrix4fv(Mmatrix, false, new Float32Array(movMatrixCylindre));
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, vertexBufferCylindre);
+            gl.vertexAttribPointer(position, 3, gl.FLOAT, false, 0, 0);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, colorBufferCylindre);
+            gl.vertexAttribPointer(color, 3, gl.FLOAT, false, 0, 0);
+
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBufferCylindre);
+            gl.drawElements(gl.TRIANGLES, indicesCylindre.length, gl.UNSIGNED_SHORT, 0);
+
+            window.requestAnimationFrame(animate);
+        };
+        animate(0);
+    </script>
+</body>
+
+</html>
