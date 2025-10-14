@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tarea 2.3 - Cargando un objeto 3D</title>
+    <style>
+        #controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            display: inline-block;
+        }
+
+        #controls div {
+            display: flex;
+            justify-content: center;
+        }
+
+        .smallButton {
+            width: 50px;
+            height: 50px;
+            margin: 3px;
+            font-size: 18px;
+            cursor: pointer;
+            background-color: rgba(255, 255, 255, 0.5);
+            border: none;
+            border-radius: 10px;
+        }
+
+        button:hover {
+            background-color: rgba(255, 255, 255, 0.8);
+        }
+
+        .reset {
+            width: 156px;
+            height: 50px;
+            margin: 3px;
+            font-size: 18px;
+            cursor: pointer;
+            background-color: rgba(255, 255, 255, 0.5);
+            border: none;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="canvas" width="700" height="700"></canvas>
+    <div id="controls">
+        <div>
+            <button class="smallButton" onclick="zoomIn()">+</button>
+            <button class="smallButton" onclick="up()">↑</button>
+            <button class="smallButton" onclick="zoomOut()">-</button>
+        </div>
+        <div>
+            <button class="smallButton" onclick="left()">←</button>
+            <button class="smallButton" onclick="down()">↓</button>
+            <button class="smallButton" onclick="right()">→</button>
+        </div>
+        <div>
+            <button class="reset" onclick="reset()">Reset</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.4.0/gl-matrix.js"></script>
+    <script>
+        var canvas = document.getElementById('canvas');
+        var gl = canvas.getContext('webgl');
+
+        // Cámara
+        var radius = 10;
+        var theta = Math.PI / 2;
+        var phi = Math.PI / 2;
+
+        var targetRadius = radius;
+        var targetTheta = theta;
+        var targetPhi = phi;
+
+        function up() {
+            targetPhi += 0.1;
+        }
+
+        function down() {
+            targetPhi -= 0.1;
+        }
+
+        function left() {
+            targetTheta -= 0.1;
+        }
+
+        function right() {
+            targetTheta += 0.1;
+        }
+
+        function zoomIn() {
+            targetRadius = Math.max(2, targetRadius - 0.5);
+        }
+
+        function zoomOut() {
+            targetRadius += 0.5;
+        }
+
+        function reset() {
+            radius = 20; theta = Math.PI / 2; phi = Math.PI / 2;
+            targetRadius = radius; targetTheta = theta; targetPhi = phi;
+        }
+
+        // Cargando del modelo Blender
+        async function loadOBJ(url) {
+            const response = await fetch(url);
+            const text = await response.text();
+            const vertices = [];
+            const texcoords = [];
+            const indices = [];
+            const tempVertices = [];
+            const tempTexcoords = [];
+
+            const lines = text.split('\n');
+            for (let line of lines) {
+                const parts = line.trim().split(/\s+/);
+                if (parts[0] === 'v') {
+                    tempVertices.push([parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3])]);
+                } else if (parts[0] === 'vt') {
+                    tempTexcoords.push([parseFloat(parts[1]), parseFloat(parts[2])]);
+                } else if (parts[0] === 'f') {
+                    for (let i = 1; i <= 3; i++) {
+                        const vals = parts[i].split('/');
+                        const v = tempVertices[parseInt(vals[0]) - 1];
+                        const t = tempTexcoords[parseInt(vals[1]) - 1];
+                        vertices.push(...v);
+                        texcoords.push(...t);
+                        indices.push(indices.length);
+                    }
+                }
+            }
+
+            return { vertices, texcoords, indices };
+        }
+
+        let modelVAO = null;
+
+        loadOBJ("objeto.obj").then(obj => {
+            const vao = {
+                vertexBuffer: gl.createBuffer(),
+                texBuffer: gl.createBuffer(),
+                indexBuffer: gl.createBuffer(),
+                numElements: obj.indices.length
+            };
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, vao.vertexBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(obj.vertices), gl.STATIC_DRAW);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, vao.texBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(obj.texcoords), gl.STATIC_DRAW);
+
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vao.indexBuffer);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(obj.indices), gl.STATIC_DRAW);
+
+            modelVAO = vao;
+            onTextureLoad();
+        });
+
+        // Shaders
+        var vertCode = `
+            attribute vec3 position;
+            attribute vec2 texCoord;
+
+            uniform mat4 Pmatrix;
+            uniform mat4 MVmatrix;
+
+            varying vec2 vTexCoord;
+
+            void main(void){ 
+                gl_Position = Pmatrix*MVmatrix*vec4(position,1.0); vTexCoord=texCoord; 
+            }
+        `;
+
+        var fragCode = `
+            precision mediump float;
+
+            varying vec2 vTexCoord;
+
+            uniform sampler2D textura;
+
+            void main(void){ 
+                gl_FragColor = texture2D(textura,vTexCoord); 
+            }
+        `;
+
+        var program = gl.createProgram();
+
+        var vertShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vertShader, vertCode);
+        gl.compileShader(vertShader);
+
+        var fragShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fragShader, fragCode);
+        gl.compileShader(fragShader);
+
+        gl.attachShader(program, vertShader);
+        gl.attachShader(program, fragShader);
+        gl.linkProgram(program);
+        gl.useProgram(program);
+
+        // Vincular buffers y atributos
+        var MVmatrix = gl.getUniformLocation(program, 'MVmatrix');
+        var Pmatrix = gl.getUniformLocation(program, 'Pmatrix');
+        var textura = gl.getUniformLocation(program, 'textura');
+
+        var position = gl.getAttribLocation(program, 'position');
+        var texCoord = gl.getAttribLocation(program, 'texCoord');
+
+        gl.enableVertexAttribArray(position);
+        gl.enableVertexAttribArray(texCoord);
+
+        function loadTexture(url, callback) {
+            var texture = gl.createTexture();
+            var image = new Image();
+            image.onload = function () {
+                gl.bindTexture(gl.TEXTURE_2D, texture);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+                if (callback) callback();
+            };
+            image.src = url;
+            image.onerror = () => console.error("Imposible de cargar la textura:", url);
+            return texture;
+        }
+
+        let texturesLoaded = 0;
+        function onTextureLoad() {
+            texturesLoaded++; if (texturesLoaded === 1) requestAnimationFrame(animate);
+        }
+        var texLetra = loadTexture("textura.jpg", onTextureLoad);
+
+        // Dibujar escena
+        let timeOld = 0;
+        function animate(time) {
+            var dt = time - timeOld; timeOld = time;
+
+            var projMatrix = mat4.create();
+            mat4.perspective(projMatrix, 40 * Math.PI / 180, canvas.width / canvas.height, 1, 100);
+            gl.uniformMatrix4fv(Pmatrix, false, projMatrix);
+
+            theta += (targetTheta - theta) * 0.1;
+            phi += (targetPhi - phi) * 0.1;
+            radius += (targetRadius - radius) * 0.1;
+
+            var eye = [
+                radius * Math.cos(theta) * Math.cos(phi),
+                radius * Math.sin(phi),
+                radius * Math.sin(theta) * Math.cos(phi)
+            ];
+            var viewMatrix = mat4.create();
+            mat4.lookAt(viewMatrix, eye, [0, 0, 0], [0, 1, 0]);
+
+            var modelViewMatrix = mat4.clone(viewMatrix);
+            mat4.rotateZ(modelViewMatrix, modelViewMatrix, 0.001 * time);
+            gl.uniformMatrix4fv(MVmatrix, false, modelViewMatrix);
+
+            gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
+            gl.clearColor(0.5, 0.5, 0.5, 0.9);
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+            if (modelVAO) {
+                gl.bindBuffer(gl.ARRAY_BUFFER, modelVAO.vertexBuffer);
+                gl.vertexAttribPointer(position, 3, gl.FLOAT, false, 0, 0);
+                gl.bindBuffer(gl.ARRAY_BUFFER, modelVAO.texBuffer);
+                gl.vertexAttribPointer(texCoord, 2, gl.FLOAT, false, 0, 0);
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, modelVAO.indexBuffer);
+                gl.bindTexture(gl.TEXTURE_2D, texLetra);
+                gl.activeTexture(gl.TEXTURE0);
+                gl.uniform1i(textura, 0);
+                gl.drawElements(gl.TRIANGLES, modelVAO.numElements, gl.UNSIGNED_SHORT, 0);
+            }
+
+            gl.disable(gl.CULL_FACE);
+
+            requestAnimationFrame(animate);
+        }
+
+        // Controles de teclado
+        document.addEventListener("keydown", function (event) {
+            switch (event.key) {
+                case "ArrowUp": up(); break;
+                case "ArrowDown": down(); break;
+                case "ArrowLeft": left(); break;
+                case "ArrowRight": right(); break;
+                case "+": zoomIn(); break;
+                case "-": zoomOut(); break;
+            }
+        });
+    </script>
+</body>
+
+</html>
