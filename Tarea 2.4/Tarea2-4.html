@@ -70,9 +70,9 @@
         var gl = canvas.getContext('webgl');
 
         // Cámara
-        var radius = 10;
+        var radius = 5;
         var theta = Math.PI / 2;
-        var phi = Math.PI / 2;
+        var phi = Math.PI / 16;
 
         var targetRadius = radius;
         var targetTheta = theta;
@@ -84,6 +84,7 @@
 
         function down() {
             targetPhi -= 0.1;
+            console.log(targetPhi);
         }
 
         function left() {
@@ -103,7 +104,7 @@
         }
 
         function reset() {
-            radius = 20; theta = Math.PI / 2; phi = Math.PI / 2;
+            radius = 5; theta = Math.PI / 2; phi = Math.PI / 16;
             targetRadius = radius; targetTheta = theta; targetPhi = phi;
         }
 
@@ -114,8 +115,10 @@
             const vertices = [];
             const texcoords = [];
             const indices = [];
+            const normals = [];
             const tempVertices = [];
             const tempTexcoords = [];
+            const tempNormals = [];
 
             const lines = text.split('\n');
             for (let line of lines) {
@@ -124,20 +127,67 @@
                     tempVertices.push([parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3])]);
                 } else if (parts[0] === 'vt') {
                     tempTexcoords.push([parseFloat(parts[1]), parseFloat(parts[2])]);
+                } else if (parts[0] === 'vn') {
+                    tempNormals.push([parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3])]);
                 } else if (parts[0] === 'f') {
                     for (let i = 1; i <= 3; i++) {
-                        const vals = parts[i].split('/');
+                        const vals = parts[i].split('/'); 
                         const v = tempVertices[parseInt(vals[0]) - 1];
                         const t = tempTexcoords[parseInt(vals[1]) - 1];
+                        const n = tempNormals[parseInt(vals[2]) - 1];
                         vertices.push(...v);
                         texcoords.push(...t);
                         indices.push(indices.length);
+                        normals.push(...n);
                     }
                 }
             }
 
-            return { vertices, texcoords, indices };
+            return { vertices, texcoords, indices, normals };
         }
+
+        var pisoSize = 50;
+
+        var pisoVertices = [
+            -pisoSize, -1, -pisoSize,
+            pisoSize, -1, -pisoSize,
+            pisoSize, -1,  pisoSize,
+            -pisoSize, -1,  pisoSize
+        ];
+
+        var pisoNormals = [
+            0, 1, 0,
+            0, 1, 0,
+            0, 1, 0,
+            0, 1, 0
+        ];
+
+        var repeat = 50;
+
+        var pisoUVs = [
+            0, 0,
+            repeat, 0,
+            repeat, repeat,
+            0, repeat
+        ];
+
+        var planeIndices = [0, 1, 2, 0, 2, 3];
+
+        var pisoVertexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, pisoVertexBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(pisoVertices), gl.STATIC_DRAW);
+
+        var pisoNormalBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, pisoNormalBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(pisoNormals), gl.STATIC_DRAW);
+
+        var pisoTexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, pisoTexBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(pisoUVs), gl.STATIC_DRAW);
+
+        var pisoIndexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, pisoIndexBuffer);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(planeIndices), gl.STATIC_DRAW);
 
         let modelVAO = null;
 
@@ -146,6 +196,7 @@
                 vertexBuffer: gl.createBuffer(),
                 texBuffer: gl.createBuffer(),
                 indexBuffer: gl.createBuffer(),
+                normalBuffer: gl.createBuffer(),
                 numElements: obj.indices.length
             };
 
@@ -158,6 +209,9 @@
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vao.indexBuffer);
             gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(obj.indices), gl.STATIC_DRAW);
 
+            gl.bindBuffer(gl.ARRAY_BUFFER, vao.normalBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(obj.normals), gl.STATIC_DRAW);
+
             modelVAO = vao;
             onTextureLoad();
         });
@@ -166,14 +220,18 @@
         var vertCode = `
             attribute vec3 position;
             attribute vec2 texCoord;
+            attribute vec3 normal;
 
             uniform mat4 Pmatrix;
             uniform mat4 MVmatrix;
 
             varying vec2 vTexCoord;
+            varying vec3 vNormal;
 
             void main(void){ 
-                gl_Position = Pmatrix*MVmatrix*vec4(position,1.0); vTexCoord=texCoord; 
+                gl_Position = Pmatrix*MVmatrix*vec4(position,1.0); 
+                vTexCoord = texCoord;
+                vNormal = normalize(mat3(MVmatrix) * normal);
             }
         `;
 
@@ -181,11 +239,15 @@
             precision mediump float;
 
             varying vec2 vTexCoord;
+            varying vec3 vNormal;
 
             uniform sampler2D textura;
+            uniform vec3 lightDir;
 
             void main(void){ 
-                gl_FragColor = texture2D(textura,vTexCoord); 
+                float diff = max(dot(normalize(vNormal), normalize(lightDir)), 0.0);
+                vec4 texColor = texture2D(textura,vTexCoord);
+                gl_FragColor = vec4(texColor.rgb * diff, texColor.a); 
             }
         `;
 
@@ -208,10 +270,13 @@
         var MVmatrix = gl.getUniformLocation(program, 'MVmatrix');
         var Pmatrix = gl.getUniformLocation(program, 'Pmatrix');
         var textura = gl.getUniformLocation(program, 'textura');
+        var lightDir = gl.getUniformLocation(program, 'lightDir'); //IL MANQUE LA VARIABLE DANS LE CODE VERTEX SHADER OU FRAGMENT SHADER
 
         var position = gl.getAttribLocation(program, 'position');
         var texCoord = gl.getAttribLocation(program, 'texCoord');
-
+        var normal = gl.getAttribLocation(program, 'normal');
+        
+        gl.enableVertexAttribArray(normal);
         gl.enableVertexAttribArray(position);
         gl.enableVertexAttribArray(texCoord);
 
@@ -220,8 +285,8 @@
             var image = new Image();
             image.onload = function () {
                 gl.bindTexture(gl.TEXTURE_2D, texture);
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
                 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
                 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
                 gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
@@ -234,14 +299,16 @@
 
         let texturesLoaded = 0;
         function onTextureLoad() {
-            texturesLoaded++; if (texturesLoaded === 1) requestAnimationFrame(animate);
+            texturesLoaded++; if (texturesLoaded === 2) requestAnimationFrame(animate);
         }
         var texLetra = loadTexture("textura.jpg", onTextureLoad);
+        var texPiso = loadTexture("piso1.jpg", onTextureLoad);
 
         // Dibujar escena
         let timeOld = 0;
         function animate(time) {
-            var dt = time - timeOld; timeOld = time;
+            var dt = time - timeOld; 
+            timeOld = time;
 
             var projMatrix = mat4.create();
             mat4.perspective(projMatrix, 40 * Math.PI / 180, canvas.width / canvas.height, 1, 100);
@@ -259,28 +326,60 @@
             var viewMatrix = mat4.create();
             mat4.lookAt(viewMatrix, eye, [0, 0, 0], [0, 1, 0]);
 
-            var modelViewMatrix = mat4.clone(viewMatrix);
-            mat4.rotateZ(modelViewMatrix, modelViewMatrix, 0.001 * time);
-            gl.uniformMatrix4fv(MVmatrix, false, modelViewMatrix);
-
-            gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
-            gl.clearColor(0.5, 0.5, 0.5, 0.9);
+            gl.enable(gl.DEPTH_TEST); 
+            gl.depthFunc(gl.LEQUAL);
+            gl.clearColor(0.0, 0.0, 0.0, 1.0);
             gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
+            var pisoModelViewMatrix = mat4.clone(viewMatrix);
+            gl.uniformMatrix4fv(MVmatrix, false, pisoModelViewMatrix);
+
+            var stride = 8 * Float32Array.BYTES_PER_ELEMENT;
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, pisoVertexBuffer);
+            gl.enableVertexAttribArray(position);
+            gl.enableVertexAttribArray(normal);
+            gl.enableVertexAttribArray(texCoord);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, pisoVertexBuffer);
+            gl.vertexAttribPointer(position, 3, gl.FLOAT, false, 0, 0);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, pisoNormalBuffer);
+            gl.vertexAttribPointer(normal, 3, gl.FLOAT, false, 0, 0);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, pisoTexBuffer);
+            gl.vertexAttribPointer(texCoord, 2, gl.FLOAT, false, 0, 0);
+
+            gl.bindTexture(gl.TEXTURE_2D, texPiso);
+            gl.activeTexture(gl.TEXTURE0);
+            gl.uniform1i(textura, 0);
+            gl.uniform3fv(lightDir, [0.0, 1.0, 1.0]);
+
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, pisoIndexBuffer);
+            gl.drawElements(gl.TRIANGLES, planeIndices.length, gl.UNSIGNED_SHORT, 0);
+
             if (modelVAO) {
+                var modelObjMatrix = mat4.clone(viewMatrix);
+                mat4.rotateY(modelObjMatrix, modelObjMatrix, 0.001 * time);
+                gl.uniformMatrix4fv(MVmatrix, false, modelObjMatrix);
+
                 gl.bindBuffer(gl.ARRAY_BUFFER, modelVAO.vertexBuffer);
                 gl.vertexAttribPointer(position, 3, gl.FLOAT, false, 0, 0);
                 gl.bindBuffer(gl.ARRAY_BUFFER, modelVAO.texBuffer);
                 gl.vertexAttribPointer(texCoord, 2, gl.FLOAT, false, 0, 0);
                 gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, modelVAO.indexBuffer);
+                gl.bindBuffer(gl.ARRAY_BUFFER, modelVAO.normalBuffer);
+                gl.vertexAttribPointer(normal, 3, gl.FLOAT, false, 0, 0);
+
                 gl.bindTexture(gl.TEXTURE_2D, texLetra);
                 gl.activeTexture(gl.TEXTURE0);
                 gl.uniform1i(textura, 0);
+                gl.uniform3fv(lightDir, [0.0, 0.0, 1.0]);
+
                 gl.drawElements(gl.TRIANGLES, modelVAO.numElements, gl.UNSIGNED_SHORT, 0);
             }
 
             gl.disable(gl.CULL_FACE);
-
             requestAnimationFrame(animate);
         }
 
