@@ -88,11 +88,11 @@
         }
 
         function left() {
-            targetTheta -= 0.1;
+            targetTheta += 0.1;
         }
 
         function right() {
-            targetTheta += 0.1;
+            targetTheta -= 0.1;
         }
 
         function zoomIn() {
@@ -171,7 +171,7 @@
             0, repeat
         ];
 
-        var planeIndices = [0, 1, 2, 0, 2, 3];
+        var pisoIndices = [0, 1, 2, 0, 2, 3];
 
         var pisoVertexBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, pisoVertexBuffer);
@@ -187,7 +187,7 @@
 
         var pisoIndexBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, pisoIndexBuffer);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(planeIndices), gl.STATIC_DRAW);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(pisoIndices), gl.STATIC_DRAW);
 
         let modelVAO = null;
 
@@ -356,7 +356,7 @@
             gl.uniform3fv(lightDir, [0.0, 1.0, 1.0]);
 
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, pisoIndexBuffer);
-            gl.drawElements(gl.TRIANGLES, planeIndices.length, gl.UNSIGNED_SHORT, 0);
+            gl.drawElements(gl.TRIANGLES, pisoIndices.length, gl.UNSIGNED_SHORT, 0);
 
             if (modelVAO) {
                 var modelObjMatrix = mat4.clone(viewMatrix);
