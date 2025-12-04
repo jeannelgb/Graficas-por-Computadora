@@ -1,0 +1,13 @@
+# Node
+node_modules/
+npm-debug.log
+.DS_Store
+package-lock.json
+
+# Build
+dist/
+build/
+
+#Autres
+Modèle Power Point/
+Reporte/
