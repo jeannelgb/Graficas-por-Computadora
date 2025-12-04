@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <title>Proyecto WebGL - Modelo Depredador–Presa</title>
+        <style>
+            body,
+            html {
+                margin: 0;
+                padding: 0;
+                overflow: hidden;
+                height: 100%;
+                background: #111;
+            }
+            canvas {
+                display: block;
+                width: 100vw;
+                height: 100vh;
+            }
+            h2 {
+                padding-top: 0;
+            }
+            #popChart {
+                position: fixed;
+                top: 10px;
+                right: 10px;
+
+                width: 300px !important;
+                height: 150px !important;
+
+                background: rgba(255, 255, 255, 0.5);
+                border-radius: 8px;
+                padding: 4px;
+                z-index: 9999;
+            }
+            #controlPanel {
+                position: absolute;
+                top: 10px;
+                left: 10px;
+                background: rgba(255,255,255,0.5);
+                padding: 20px;
+                border-radius: 10px;
+                z-index: 10;
+                font-family: Arial, sans-serif;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
+            #homePanel {
+                width: 300px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
+            #preyCountSlider, #predCountSlider {
+                -webkit-appearance: none;
+                width: 100%;
+                height: 5px;
+                background: black;
+            }
+            .slider {
+                margin-bottom: 20px;
+            }
+            #startBtn {
+                padding: 10px 20px;
+                font-size: 16px;
+                cursor: pointer;
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 5px;
+            }
+            #startBtn:hover {
+                background-color: #45a049;
+            }
+            #stopBtn {
+                padding: 10px 20px;
+                font-size: 16px;
+                cursor: pointer;
+                background-color: #f44336;
+                color: white;
+                border: none;
+                border-radius: 5px;
+            }
+            #stopBtn:hover {
+                background-color: #da190b;
+            }
+            .controles {
+                margin: 10px;
+                gap: 5px;
+            }
+            .btn {
+                padding: 8px 12px;
+                width: 40px;
+                height: 40px;
+                font-size: 16px;
+                color: black;
+                margin: 2px;
+                cursor: pointer;
+                background-color: rgba(255, 255, 255, 0.7);
+                border: none;
+                border-radius: 5px;
+            }
+            .controles button:hover {
+                background-color: rgba(200, 200, 200, 0.9);
+            }
+            .reset {
+                padding: 8px 12px;
+                width: 137px;
+                height: 40px;
+                font-size: 16px;
+                color: black;
+                margin: 2px;
+                cursor: pointer;
+                background-color: rgba(255, 255, 255, 0.7);
+                border: none;
+                border-radius: 5px;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="controlPanel">
+            <!-- PAGE D'ACCUEIL -->
+            <div id="homePanel">
+                <h2>Configuración Inicial</h2>
+                <div class="slider">
+                    <label>Número inicial de presas: <span id="preyCountLabel">40</span></label>
+                    <input type="range" id="preyCountSlider" min="1" max="100" value="40">
+                </div>
+                <div class="slider">
+                    <label>Número inicial de depredadores: <span id="predCountLabel">8</span></label>
+                    <input type="range" id="predCountSlider" min="1" max="50" value="8">
+                </div>
+                <button id="startBtn">Start Simulation</button>
+            </div>
+            <!-- SIMULATION -->
+            <div id="simPanel" style="display:none;">
+                <canvas id="popChart" width="280" height="150"></canvas>   
+                <div class="controles">
+                    <div>
+                        <button class="btn" id="camZoomOut">−</button>
+                        <button class="btn" id="camUp">↑</button>
+                        <button class="btn" id="camZoomIn">+</button>
+                    </div>
+                    <div>
+                        <button class="btn" id="camLeft">←</button>
+                        <button class="btn" id="camDown">↓</button>
+                        <button class="btn" id="camRight">→</button>
+                    </div> 
+                    <div>
+                        <button class="reset" id="camReset">Reset</button>
+                    </div>  
+                </div>
+                <button id="stopBtn">Stop Simulation</button>
+            </div>
+        </div>
+        <canvas id="glcanvas"></canvas>
+        <script type="module" src="main.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    </body>
+</html>
