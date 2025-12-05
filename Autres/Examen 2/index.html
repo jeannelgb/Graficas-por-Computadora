@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Examen 2 - Jeanne LE GALL-BOTTE</title>
+    <style>
+        #controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            display: inline-block;
+        }
+
+        #controls div {
+            display: flex;
+            justify-content: center;
+        }
+
+        .smallButton {
+            width: 50px;
+            height: 50px;
+            margin: 3px;
+            font-size: 18px;
+            cursor: pointer;
+            background-color: rgba(255, 255, 255, 0.5);
+            border: none;
+            border-radius: 10px;
+        }
+
+        button:hover {
+            background-color: rgba(255, 255, 255, 0.8);
+        }
+
+        .reset {
+            width: 156px;
+            height: 50px;
+            margin: 3px;
+            font-size: 18px;
+            cursor: pointer;
+            background-color: rgba(255, 255, 255, 0.5);
+            border: none;
+            border-radius: 10px;
+        }
+
+        p {
+            color: white;
+            font-size: 15px;
+            text-align: center;
+            margin: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="canvas" width="700" height="700"></canvas>
+    <div id="controls">
+        <div>
+            <button class="smallButton" onclick="zoomIn()">+</button>
+            <button class="smallButton" onclick="up()">↑</button>
+            <button class="smallButton" onclick="zoomOut()">-</button>
+        </div>
+        <div>
+            <button class="smallButton" onclick="left()">←</button>
+            <button class="smallButton" onclick="down()">↓</button>
+            <button class="smallButton" onclick="right()">→</button>
+        </div>
+        <div>
+            <button class="reset" onclick="reset()">Reset</button>
+        </div>
+        <div>
+            <p>Número de triángulos: <span id="numTriangulos">0</span></p>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.4.0/gl-matrix.js"></script>
+    <script>
+        var canvas = document.getElementById('canvas');
+        var gl = canvas.getContext('webgl');
+
+        // Cámara
+        var radius = 5;
+        var theta = Math.PI / 2;
+        var phi = Math.PI / 16;
+
+        var targetRadius = radius;
+        var targetTheta = theta;
+        var targetPhi = phi;
+
+        function up() {
+            targetPhi += 0.1;
+        }
+
+        function down() {
+            targetPhi -= 0.1;
+            console.log(targetPhi);
+        }
+
+        function left() {
+            targetTheta += 0.1;
+        }
+
+        function right() {
+            targetTheta -= 0.1;
+        }
+
+        function zoomIn() {
+            targetRadius = Math.max(2, targetRadius - 0.5);
+        }
+
+        function zoomOut() {
+            targetRadius += 0.5;
+        }
+
+        function reset() {
+            radius = 5; theta = Math.PI / 2; phi = Math.PI / 16;
+            targetRadius = radius; targetTheta = theta; targetPhi = phi;
+        }
+
+        // Cargando del modelo Blender
+        async function loadOBJ(url) {
+            const response = await fetch(url);
+            const text = await response.text();
+            const vertices = [];
+            const texcoords = [];
+            const indices = [];
+            const normals = [];
+            const tempVertices = [];
+            const tempTexcoords = [];
+            const tempNormals = [];
+
+            const lines = text.split('\n');
+            for (let line of lines) {
+                const parts = line.trim().split(/\s+/);
+                if (parts[0] === 'v') {
+                    tempVertices.push([parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3])]);
+                } else if (parts[0] === 'vt') {
+                    tempTexcoords.push([parseFloat(parts[1]), parseFloat(parts[2])]);
+                } else if (parts[0] === 'vn') {
+                    tempNormals.push([parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3])]);
+                } else if (parts[0] === 'f') {
+                    for (let i = 1; i <= 3; i++) {
+                        const vals = parts[i].split('/'); 
+                        const v = tempVertices[parseInt(vals[0]) - 1];
+                        const t = tempTexcoords[parseInt(vals[1]) - 1];
+                        const n = tempNormals[parseInt(vals[2]) - 1];
+                        vertices.push(...v);
+                        texcoords.push(...t);
+                        indices.push(indices.length);
+                        normals.push(...n);
+                    }
+                }
+            }
+
+            return { vertices, texcoords, indices, normals };
+        }
+
+        let modelVAO = null;
+
+        loadOBJ("esfera.obj").then(obj => {
+            const vao = {
+                vertexBuffer: gl.createBuffer(),
+                texBuffer: gl.createBuffer(),
+                indexBuffer: gl.createBuffer(),
+                normalBuffer: gl.createBuffer(),
+                numElements: obj.indices.length
+            };
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, vao.vertexBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(obj.vertices), gl.STATIC_DRAW);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, vao.texBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(obj.texcoords), gl.STATIC_DRAW);
+
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vao.indexBuffer);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(obj.indices), gl.STATIC_DRAW);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, vao.normalBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(obj.normals), gl.STATIC_DRAW);
+
+            modelVAO = vao;
+            var numTriangulos = modelVAO ? modelVAO.numElements / 3 : 0;
+            document.getElementById("numTriangulos").textContent = numTriangulos;
+
+            var puntosMedios = [];
+            var segmentos = [];
+            var scale = 0.2;
+            
+            for (let i = 0; i < obj.vertices.length; i += 9) {
+                var x = (obj.vertices[i] + obj.vertices[i + 3] + obj.vertices[i + 6]) / 3;
+                var y = (obj.vertices[i + 1] + obj.vertices[i + 4] + obj.vertices[i + 7]) / 3;
+                var z = (obj.vertices[i + 2] + obj.vertices[i + 5] + obj.vertices[i + 8]) / 3;
+                puntosMedios.push([x, y, z]);
+                segmentos.push(x, y, z);
+
+                var nx = (obj.normals[i] + obj.normals[i + 3] + obj.normals[i + 6]) / 3;
+                var ny = (obj.normals[i + 1] + obj.normals[i + 4] + obj.normals[i + 7]) / 3;
+                var nz = (obj.normals[i + 2] + obj.normals[i + 5] + obj.normals[i + 8]) / 3;
+
+                var len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+                nx /= len; ny /= len; nz /= len;
+                segmentos.push(x + nx * scale, y + ny * scale, z + nz * scale);
+            }
+            vao.segmentosBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, vao.segmentosBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(segmentos), gl.STATIC_DRAW);
+            vao.numLineVertices = segmentos.length / 3;
+        });
+
+
+        // Shaders
+        var vertCode = `
+            attribute vec3 position;
+            attribute vec3 normal;
+
+            uniform mat4 Pmatrix;
+            uniform mat4 MVmatrix;
+
+            varying vec3 vNormal;
+
+            void main(void){ 
+                gl_Position = Pmatrix*MVmatrix*vec4(position,1.0); 
+                vNormal = normalize(mat3(MVmatrix) * normal);
+            }
+        `;
+
+        var fragCode = `
+            precision mediump float;
+
+            varying vec3 vNormal;
+
+            uniform vec3 lightDir;
+
+            void main(void){ 
+                float diff = max(dot(normalize(vNormal), normalize(lightDir)), 0.0);
+                gl_FragColor = vec4(0.6, 0.6, 0.6, 1.0) * diff; 
+            }
+        `;
+
+        var program = gl.createProgram();
+
+        var vertShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vertShader, vertCode);
+        gl.compileShader(vertShader);
+
+        var fragShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fragShader, fragCode);
+        gl.compileShader(fragShader);
+
+        gl.attachShader(program, vertShader);
+        gl.attachShader(program, fragShader);
+        gl.linkProgram(program);
+        gl.useProgram(program);
+
+        // Vincular buffers y atributos
+        var MVmatrix = gl.getUniformLocation(program, 'MVmatrix');
+        var Pmatrix = gl.getUniformLocation(program, 'Pmatrix');
+        var lightDir = gl.getUniformLocation(program, 'lightDir');
+
+        var position = gl.getAttribLocation(program, 'position');
+        var normal = gl.getAttribLocation(program, 'normal');
+        
+        gl.enableVertexAttribArray(normal);
+        gl.enableVertexAttribArray(position);
+
+        // Dibujar escena
+        let timeOld = 0;
+        function animate(time) {
+            var dt = time - timeOld; 
+            timeOld = time;
+
+            var projMatrix = mat4.create();
+            mat4.perspective(projMatrix, 40 * Math.PI / 180, canvas.width / canvas.height, 1, 100);
+            gl.uniformMatrix4fv(Pmatrix, false, projMatrix);
+
+            theta += (targetTheta - theta) * 0.1;
+            phi += (targetPhi - phi) * 0.1;
+            radius += (targetRadius - radius) * 0.1;
+
+            var eye = [
+                radius * Math.cos(theta) * Math.cos(phi),
+                radius * Math.sin(phi),
+                radius * Math.sin(theta) * Math.cos(phi)
+            ];
+            var viewMatrix = mat4.create();
+            mat4.lookAt(viewMatrix, eye, [0, 0, 0], [0, 1, 0]);
+
+            gl.enable(gl.DEPTH_TEST); 
+            gl.depthFunc(gl.LEQUAL);
+            gl.clearColor(0.0, 0.0, 0.0, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+            if (modelVAO) {
+                var modelObjMatrix = mat4.clone(viewMatrix);
+                gl.uniformMatrix4fv(MVmatrix, false, modelObjMatrix);
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, modelVAO.vertexBuffer);
+                gl.vertexAttribPointer(position, 3, gl.FLOAT, false, 0, 0);
+                gl.enableVertexAttribArray(position);
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, modelVAO.normalBuffer);
+                gl.vertexAttribPointer(normal, 3, gl.FLOAT, false, 0, 0);
+                gl.enableVertexAttribArray(normal);
+
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, modelVAO.indexBuffer);
+
+                gl.uniform3fv(lightDir, [0.0, 0.0, 1.0]);
+
+                gl.drawElements(gl.TRIANGLES, modelVAO.numElements, gl.UNSIGNED_SHORT, 0);
+
+                if(modelVAO.segmentosBuffer){
+                    gl.bindBuffer(gl.ARRAY_BUFFER, modelVAO.segmentosBuffer);
+                    gl.vertexAttribPointer(position, 3, gl.FLOAT, false, 0, 0);
+                    gl.enableVertexAttribArray(position);
+
+                    gl.disableVertexAttribArray(normal);
+
+                    gl.drawArrays(gl.LINES, 0, modelVAO.numLineVertices);
+                }
+            }
+
+            gl.disable(gl.CULL_FACE);
+            requestAnimationFrame(animate);
+        }
+
+        // Controles de teclado
+        document.addEventListener("keydown", function (event) {
+            switch (event.key) {
+                case "ArrowUp": up(); break;
+                case "ArrowDown": down(); break;
+                case "ArrowLeft": left(); break;
+                case "ArrowRight": right(); break;
+                case "+": zoomIn(); break;
+                case "-": zoomOut(); break;
+            }
+        });
+
+        animate(0);
+    </script>
+</body>
+
+</html>

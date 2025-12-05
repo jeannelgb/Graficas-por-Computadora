@@ -1,0 +1,460 @@
+<!doctype html>
+<html>
+
+<body>
+    <canvas width="570" height="570" id="my_Canvas"></canvas>
+
+    <script>
+        /*============= Creating a canvas =================*/
+        var canvas = document.getElementById('my_Canvas');
+        gl = canvas.getContext('experimental-webgl');
+
+        /*============ Defining and storing the geometry =========*/
+
+        function createCylinder(radius = 1, height = 2, segments = 32) {
+            let vertices = [];
+            let indices = [];
+            let colors = [];
+
+            let angleStep = 2 * Math.PI / segments;
+
+            // --- Sommets ---
+            // Centre bas
+            vertices.push(0, 0, 0);
+            colors.push(1, 0, 0); // rouge
+
+            // Centre haut
+            vertices.push(0, 0, height);
+            colors.push(0, 0, 1); // bleu
+
+            // Cercles
+            for (let i = 0; i <= segments; i++) {
+                let angle = i * angleStep;
+                let x = radius * Math.cos(angle);
+                let y = radius * Math.sin(angle);
+
+                // Bas
+                vertices.push(x, y, 0);
+                colors.push(1, 0, 1); 
+
+                // Haut
+                vertices.push(x, y, height);
+                colors.push(1, 0, 1);
+            }
+
+            // --- Indices ---
+            // Bas (0 = centre bas)
+            for (let i = 0; i < segments; i++) {
+                indices.push(0, 2 + i * 2, 2 + ((i + 1) % segments) * 2);
+            }
+
+            // Haut (1 = centre haut)
+            for (let i = 0; i < segments; i++) {
+                indices.push(1, 3 + ((i + 1) % segments) * 2, 3 + i * 2);
+            }
+
+            // Côtés
+            for (let i = 0; i < segments; i++) {
+                let p1 = 2 + i * 2;     // bas
+                let p2 = 3 + i * 2;     // haut
+                let p3 = 2 + ((i + 1) % segments) * 2;
+                let p4 = 3 + ((i + 1) % segments) * 2;
+
+                indices.push(p1, p2, p3);
+                indices.push(p3, p2, p4);
+            }
+
+            return { vertices, indices, colors };
+        }
+
+        var cylindreData = createCylinder(0.05, 1, 32);
+
+        var verticesCylindre = cylindreData.vertices;
+        var indicesCylindre = cylindreData.indices;
+        var colorsCylindre = cylindreData.colors;
+
+        var verticesCubo = [
+            -1,-1,-1, 
+            1,-1,-1, 
+            1,1,-1, 
+            -1,1,-1,
+
+            -1,-1,1, 
+            1,-1,1, 
+            1,1,1, 
+            -1,1,1,
+
+            -1,-1,-1, 
+            -1,1,-1, 
+            -1,1,1, 
+            -1,-1,1,
+
+            1,-1,-1, 
+            1,1,-1, 
+            1,1,1, 
+            1,-1,1,
+
+            -1,-1,-1, 
+            -1,-1,1, 
+            1,-1,1, 
+            1,-1,-1,
+
+            -1,1,-1, 
+            -1,1,1, 
+            1,1,1, 
+            1,1,-1,
+        ];
+
+        var indicesCubo = [
+            0,1,2, 
+            0,2,3, 
+            
+            4,5,6, 
+            4,6,7,
+
+            8,9,10, 
+            8,10,11, 
+            
+            12,13,14, 
+            12,14,15,
+
+            16,17,18, 
+            16,18,19, 
+            
+            20,21,22, 
+            20,22,23
+        ];
+
+        var colorsCubo = [
+            5,3,7, 
+            5,3,7, 
+            5,3,7, 
+            5,3,7,
+
+            1,1,3, 
+            1,1,3, 
+            1,1,3, 
+            1,1,3,
+
+            0,0,1, 
+            0,0,1, 
+            0,0,1, 
+            0,0,1,
+
+            1,0,0, 
+            1,0,0, 
+            1,0,0, 
+            1,0,0,
+
+            1,1,0, 
+            1,1,0, 
+            1,1,0, 
+            1,1,0,
+
+            0,1,0, 
+            0,1,0, 
+            0,1,0,
+            0,1,0,
+        ]
+
+        var verticesPiramida = [
+            -1,-1,-1, 
+            1,-1,-1,
+            1,1,-1,
+            -1,1,-1,
+
+            -1,-1,-1, 
+            1,-1,-1, 
+            0,0,1, //0,1,S
+
+            1,-1,-1, 
+            1,1,-1, 
+            0,0,1, //1,2,S
+
+            1,1,-1, 
+            -1,1,-1, 
+            0,0,1, //2,3,S
+
+            -1,1,-1, 
+            -1,-1,-1,
+            0,0,1 //3,0,S
+        ]
+
+        var indicesPiramida = [
+            0,1,3, 
+            1,2,3,
+
+            4,5,6, 
+            7,8,9, 
+            10,11,12, 
+            13,14,15
+        ]
+
+        var colorsPiramida = [
+            1,0,0, 
+            1,0,0, 
+            1,0,0, 
+            1,0,0,
+
+            0,0,1, 
+            0,0,1,
+            0,0,1,
+
+            0,1,0, 
+            0,1,0, 
+            0,1,0,
+
+            1,1,0, 
+            1,1,0, 
+            1,1,0,
+            
+            0,1,1, 
+            0,1,1, 
+            0,1,1
+        ]
+
+        // Create and store data into vertex buffer
+        var vertex_bufferCubo = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertex_bufferCubo);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verticesCubo), gl.STATIC_DRAW);
+
+        // Create and store data into index buffer
+        var index_bufferCubo = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, index_bufferCubo);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indicesCubo), gl.STATIC_DRAW);
+
+        // Create and store data into color buffer
+        var color_bufferCubo = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, color_bufferCubo);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colorsCubo), gl.STATIC_DRAW);
+
+        // Create and store data into vertex buffer
+        var vertex_bufferPiramida = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertex_bufferPiramida);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verticesPiramida), gl.STATIC_DRAW);
+
+        // Create and store data into index buffer
+        var index_bufferPiramida = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, index_bufferPiramida);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indicesPiramida), gl.STATIC_DRAW);
+
+        // Create and store data into color buffer
+        var color_bufferPiramida = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, color_bufferPiramida);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colorsPiramida), gl.STATIC_DRAW);
+
+        // Create and store data into vertex buffer
+        var vertex_bufferCylindre = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertex_bufferCylindre);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verticesCylindre), gl.STATIC_DRAW);
+
+        // Create and store data into index buffer
+        var index_bufferCylindre = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, index_bufferCylindre);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indicesCylindre), gl.STATIC_DRAW);
+
+        // Create and store data into color buffer
+        var color_bufferCylindre = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, color_bufferCylindre);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colorsCylindre), gl.STATIC_DRAW);
+
+        /*=================== Shaders =========================*/
+
+        var vertCode = 'attribute vec3 position;' +
+            'uniform mat4 Pmatrix;' +
+            'uniform mat4 Vmatrix;' +
+            'uniform mat4 Mmatrix;' +
+            'attribute vec3 color;' +
+            'varying vec3 vColor;' +
+
+            'void main(void) { ' +
+            'gl_Position = Pmatrix*Vmatrix*Mmatrix*vec4(position, 1.);' +
+            'vColor = color;' +
+            '}';
+
+        var fragCode = 'precision mediump float;' +
+            'varying vec3 vColor;' +
+            'void main(void) {' +
+            'gl_FragColor = vec4(vColor, 1.);' +
+            '}';
+
+        var vertShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vertShader, vertCode);
+        gl.compileShader(vertShader);
+
+        var fragShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fragShader, fragCode);
+        gl.compileShader(fragShader);
+
+        var shaderProgram = gl.createProgram();
+        gl.attachShader(shaderProgram, vertShader);
+        gl.attachShader(shaderProgram, fragShader);
+        gl.linkProgram(shaderProgram);
+        gl.useProgram(shaderProgram);
+
+        /* ====== Associating attributes to vertex shader =====*/
+        var Pmatrix = gl.getUniformLocation(shaderProgram, "Pmatrix");
+        var Vmatrix = gl.getUniformLocation(shaderProgram, "Vmatrix");
+        var Mmatrix = gl.getUniformLocation(shaderProgram, "Mmatrix");
+
+        var position = gl.getAttribLocation(shaderProgram, "position");
+        var color = gl.getAttribLocation(shaderProgram, "color");
+
+        gl.enableVertexAttribArray(position);
+        gl.enableVertexAttribArray(color);   
+
+        /*==================== MATRIX =====================*/
+
+        function get_projection(angle, a, zMin, zMax) {
+            var ang = Math.tan((angle * .5) * Math.PI / 180);//angle*.5
+            return [
+                0.5 / ang, 0, 0, 0,
+                0, 0.5 * a / ang, 0, 0,
+                0, 0, -(zMax + zMin) / (zMax - zMin), -1,
+                0, 0, (-2 * zMax * zMin) / (zMax - zMin), 0
+            ];
+        }
+
+        var proj_matrix = get_projection(40, canvas.width / canvas.height, 1, 100);
+        var view_matrix = [
+            1,0,0,0, 
+            0,1,0,0, 
+            0,0,1,0, 
+            0,0,0,1
+        ];
+        // translating z
+        view_matrix[14] = view_matrix[14] - 6;
+
+        var cuboMatrix = [
+            1,0,0,0, 
+            0,1,0,0, 
+            0,0,1,0, 
+            0,0,0,1
+        ];
+        var piramidaMatrix = [
+            1,0,0,0, 
+            0,1,0,0, 
+            0,0,1,0, 
+            0,0,0,1
+        ];
+
+        function translate(m, x, y, z) {
+            m[12] += x;
+            m[13] += y;
+            m[14] += z;
+        }
+
+        /*==================== Rotation ====================*/
+
+        function rotateX(m, angle) {
+            var c = Math.cos(angle);
+            var s = Math.sin(angle);
+            var mv1 = m[1], mv5 = m[5], mv9 = m[9];
+
+            m[1] = m[1] * c - m[2] * s;
+            m[5] = m[5] * c - m[6] * s;
+            m[9] = m[9] * c - m[10] * s;
+
+            m[2] = m[2] * c + mv1 * s;
+            m[6] = m[6] * c + mv5 * s;
+            m[10] = m[10] * c + mv9 * s;
+        }
+
+        function rotateY(m, angle) {
+            var c = Math.cos(angle);
+            var s = Math.sin(angle);
+            var mv0 = m[0], mv4 = m[4], mv8 = m[8];
+
+            m[0] = c * m[0] + s * m[2];
+            m[4] = c * m[4] + s * m[6];
+            m[8] = c * m[8] + s * m[10];
+
+            m[2] = c * m[2] - s * mv0;
+            m[6] = c * m[6] - s * mv4;
+            m[10] = c * m[10] - s * mv8;
+        }
+
+        function rotateZ(m, angle) {
+            var c = Math.cos(angle);
+            var s = Math.sin(angle);
+            var mv0 = m[0], mv4 = m[4], mv8 = m[8];
+
+            m[0] = c * m[0] - s * m[1];
+            m[4] = c * m[4] - s * m[5];
+            m[8] = c * m[8] - s * m[9];
+
+            m[1] = c * m[1] + s * mv0;
+            m[5] = c * m[5] + s * mv4;
+            m[9] = c * m[9] + s * mv8;
+        }
+
+        /*================= Drawing ===========================*/
+        var time_old = 0;
+
+        var animate = function (time) {
+
+            var dt = time - time_old;
+
+            rotateZ(cuboMatrix, dt * 0.005);//time
+            rotateY(cuboMatrix, dt * 0.002);
+            rotateX(cuboMatrix, dt * 0.003);
+
+            rotateZ(piramidaMatrix, dt * 0.005);//time
+            rotateY(piramidaMatrix, dt * 0.002);
+            rotateX(piramidaMatrix, dt * 0.003);
+
+            time_old = time;
+
+            gl.enable(gl.DEPTH_TEST);
+            gl.depthFunc(gl.LEQUAL);
+            gl.clearColor(0.5, 0.5, 0.5, 0.9);
+            gl.clearDepth(1.0);
+            gl.viewport(0.0, 0.0, canvas.width, canvas.height);
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+            gl.uniformMatrix4fv(Pmatrix, false, proj_matrix);
+            gl.uniformMatrix4fv(Vmatrix, false, view_matrix);
+            gl.uniformMatrix4fv(Mmatrix, false, cuboMatrix);
+
+            //Cubo
+            gl.bindBuffer(gl.ARRAY_BUFFER, vertex_bufferCubo);
+            gl.vertexAttribPointer(position, 3, gl.FLOAT, false, 0, 0);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, color_bufferCubo);
+            gl.vertexAttribPointer(color, 3, gl.FLOAT, false, 0, 0);
+
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, index_bufferCubo);
+            gl.drawElements(gl.TRIANGLES, indicesCubo.length, gl.UNSIGNED_SHORT, 0);
+
+            //Piramida
+            var tempPiramidaMatrix = [...piramidaMatrix]
+            translate(tempPiramidaMatrix, 3.0, 0, 0);
+
+            gl.uniformMatrix4fv(Mmatrix, false, tempPiramidaMatrix);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, vertex_bufferPiramida);
+            gl.vertexAttribPointer(position, 3, gl.FLOAT, false, 0, 0);
+            
+            gl.bindBuffer(gl.ARRAY_BUFFER, color_bufferPiramida);
+            gl.vertexAttribPointer(color, 3, gl.FLOAT, false, 0, 0);
+
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, index_bufferPiramida);
+            gl.drawElements(gl.TRIANGLES, indicesPiramida.length, gl.UNSIGNED_SHORT, 0);
+
+            //Cylindre
+            gl.bindBuffer(gl.ARRAY_BUFFER, vertex_bufferCylindre);
+            gl.vertexAttribPointer(position, 3, gl.FLOAT, false, 0, 0);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, color_bufferCylindre);
+            gl.vertexAttribPointer(color, 3, gl.FLOAT, false, 0, 0);
+
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, index_bufferCylindre);
+            gl.drawElements(gl.TRIANGLES, indicesCylindre.length, gl.UNSIGNED_SHORT, 0);
+
+            window.requestAnimationFrame(animate);
+        }
+        animate(0);
+    </script>
+</body>
+
+</html>

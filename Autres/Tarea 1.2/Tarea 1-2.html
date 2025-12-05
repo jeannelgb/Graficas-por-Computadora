@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Árbol fractal binario con WebGL</title>
+    <style>
+      :root { color-scheme: dark; }
+      html, body { margin: 0; height: 100%; background: darkgray; }
+      canvas { display: block; width: 100%; height: 100%; }
+      .ui {
+        position: fixed; inset: 12px auto auto 12px;
+        background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255,255,255,0.1);
+        padding: 12px; border-radius: 10px; font: 14px/1.25 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+        color: white; backdrop-filter: blur(6px); user-select: none;
+      }
+      .row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+    </style>
+  </head>
+
+  <body>
+    <canvas id="glcanvas"></canvas>
+
+    <div class="ui">
+      <div class="row">
+        <label for="iter">Iteraciones</label>
+        <input id="iter" type="range" min="0" max="12" step="1" value="9" />
+        <strong id="iterVal">9</strong>
+      </div>
+    </div>
+
+    <script>
+
+    const VERT_SRC = `
+    attribute vec2 a_pos;
+    void main() {
+      gl_Position = vec4(a_pos, 0.0, 1.0);
+    }
+    `;
+
+    const FRAG_SRC = `
+    precision mediump float;
+    uniform vec4 u_color;
+    void main() {
+      gl_FragColor = u_color;
+    }
+    `;
+
+    function createShader(gl, type, src) {
+      const sh = gl.createShader(type);
+      gl.shaderSource(sh, src); 
+      gl.compileShader(sh);
+      if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+        throw new Error("Shader compile error: " + gl.getShaderInfoLog(sh));
+      }
+      return sh;
+    }
+    function createProgram(gl, vs, fs) {
+      const p = gl.createProgram();
+      gl.attachShader(p, vs); 
+      gl.attachShader(p, fs); 
+      gl.linkProgram(p);
+      if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+        throw new Error("Program link error: " + gl.getProgramInfoLog(p));
+      }
+      return p;
+    }
+
+    function addSegment(out, x1, y1, x2, y2){
+      out.push(x1, y1, x2, y2);
+    }
+
+    function buildTree(out, x, y, length, angle, depth){
+      const x2 = x + length * Math.cos(angle);
+      const y2 = y + length * Math.sin(angle);
+      addSegment(out, x, y, x2, y2);
+
+      if (depth <= 0) return;
+
+      buildTree(out, x2, y2, length*0.7, angle+Math.PI/6, depth-1);
+      buildTree(out, x2, y2, length*0.7, angle-Math.PI/6, depth-1);
+    }
+
+    (function main(){
+      const canvas = document.getElementById('glcanvas');
+      const gl = canvas.getContext('webgl', {antialias:true});
+      if(!gl){ alert('Votre navigateur ne supporte pas WebGL.'); return; }
+
+      const vs = createShader(gl, gl.VERTEX_SHADER, VERT_SRC);
+      const fs = createShader(gl, gl.FRAGMENT_SHADER, FRAG_SRC);
+      const program = createProgram(gl, vs, fs);
+      gl.useProgram(program);
+
+      const a_pos   = gl.getAttribLocation(program, 'a_pos');
+      const u_color = gl.getUniformLocation(program, 'u_color');
+
+      const vbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+
+      const STRIDE = 2 * 4;
+      gl.enableVertexAttribArray(a_pos);
+      gl.vertexAttribPointer(a_pos, 2, gl.FLOAT, false, STRIDE, 0);
+
+      let vertCount = 0;
+      let maxDepth = 9;
+
+      function buildGeometry(){
+        const data = [];
+        const startX = 0.0;
+        const startY = -1.0;
+        const length = 0.5;
+        const angle = Math.PI / 2;
+
+        buildTree(data, startX, startY, length, angle, maxDepth);
+
+        const f32 = new Float32Array(data);
+        gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+        gl.bufferData(gl.ARRAY_BUFFER, f32, gl.STATIC_DRAW);
+        vertCount = f32.length / 2;
+      }
+
+      const iter = document.getElementById('iter');
+      const iterVal = document.getElementById('iterVal');
+
+      iter.addEventListener('input', () => {
+        maxDepth = parseInt(iter.value, 10);
+        iterVal.textContent = maxDepth;
+        buildGeometry();
+      });
+
+      buildGeometry();
+
+      gl.clearColor(0.07, 0.08, 0.10, 1.0);
+      gl.uniform4f(u_color, 0.95, 0.96, 0.99, 1.0);
+
+      function resize(){
+        const dpr = Math.max(1, window.devicePixelRatio || 1);
+        const w = Math.floor(canvas.clientWidth * dpr);
+        const h = Math.floor(canvas.clientHeight * dpr);
+        if (canvas.width !== w || canvas.height !== h){
+          canvas.width = w; canvas.height = h;
+        }
+        gl.viewport(0,0,canvas.width, canvas.height);
+      }
+      
+      const ro = new ResizeObserver(resize);
+      ro.observe(canvas);
+
+      function render(){
+        resize();
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+        gl.vertexAttribPointer(a_pos, 2, gl.FLOAT, false, STRIDE, 0);
+        gl.drawArrays(gl.LINES, 0, vertCount);
+        requestAnimationFrame(render);
+      }
+      render();
+    })();
+    </script>
+  </body>
+</html>

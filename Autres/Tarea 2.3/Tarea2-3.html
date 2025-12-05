@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Tarea 2.3 - Ordenamiento</title>
+    <style>
+        #controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            display: inline-block;
+        }
+        #controls div {
+            display: flex;
+            justify-content: center;
+        }
+        .smallButton {
+            width: 156px;
+            height: 50px;
+            margin: 3px;
+            font-size: 18px;
+            cursor: pointer;
+            background-color: rgba(255, 255, 255, 0.5);
+            border: none;
+            border-radius: 10px;
+        }
+        button:hover {
+            background-color: rgba(255, 255, 255, 0.8);
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="canvas" width="800" height="800"></canvas>
+    <div id="controls">
+        <button class="smallButton" onclick="activateSort()">Sort</button>    
+        <button class="smallButton" onclick="reset()">Reset</button>       
+    <div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.4.0/gl-matrix.js"></script>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const gl = canvas.getContext('webgl');
+        const ext = gl.getExtension('ANGLE_instanced_arrays');
+
+        var vertices = [
+            -0.5, 0.15, 0.0,
+            0.5, 0.15, 0.0,
+            -0.5, -0.15, 0.0,
+            -0.5, -0.15, 0.0,
+            0.5, -0.15, 0.0,
+            0.5, 0.15, 0.0,
+
+            -0.15, 0.5, 0.0,
+            0.15, 0.5, 0.0,
+            -0.15, -0.5, 0.0,
+            -0.15, -0.5, 0.0,
+            0.15, -0.5, 0.0,
+            0.15, 0.5, 0.0
+        ];
+
+        var indices = [
+            0, 1, 2,
+            3, 4, 5,
+            6, 7, 8,
+            9, 10, 11
+        ];
+
+        var colors = [
+            1, 0, 0,
+            0, 1, 0,
+            0, 0, 1,
+            1, 0, 1,
+            0, 1, 1
+        ];
+
+        // Vertex buffer
+        var vertexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+
+        // Index buffer
+        var indexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+
+        // Color buffer
+        var colorBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+
+        // Shaders
+        var vertCode =
+            'uniform vec4 translation;' +
+            'uniform mat4 Pmatrix;' +
+            'uniform mat4 MVmatrix;' +
+            'attribute vec3 position;' +
+            'attribute vec3 color;' +
+            'varying vec3 vColor;' +
+            'void main(void) {' +
+            ' gl_Position = Pmatrix*MVmatrix*vec4(position, 1.0) + translation;' +
+            ' vColor = color;' +
+            '}';
+
+        var fragCode =
+            'precision mediump float;' +
+            'varying vec3 vColor;' +
+            'void main(void) {' +
+            ' gl_FragColor = vec4(vColor, 1.0);' +
+            '}';
+
+        var vertShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vertShader, vertCode);
+        gl.compileShader(vertShader);
+
+        var fragShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fragShader, fragCode);
+        gl.compileShader(fragShader);
+
+        var program = gl.createProgram();
+        gl.attachShader(program, vertShader);
+        gl.attachShader(program, fragShader);
+        gl.linkProgram(program);
+        gl.useProgram(program);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+        var position = gl.getAttribLocation(program, "position");
+        gl.vertexAttribPointer(position, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(position);
+
+        var color = gl.getAttribLocation(program, "color");
+        gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+        gl.vertexAttribPointer(color, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(color);
+        ext.vertexAttribDivisorANGLE(color, 1);
+
+        var Pmatrix = gl.getUniformLocation(program, 'Pmatrix');
+        var MVmatrix = gl.getUniformLocation(program, "MVmatrix");
+
+        var numVertices = vertices.length / 3;
+        var numInstances = colors.length / 3;
+
+        var instances = [];
+        for (let i = 0; i < numInstances; i++) {
+            var scale = Math.random();
+            instances.push({
+                size: scale,
+                pos: -2 + i,
+                targetPos: -2 + i
+            });
+        }
+
+        var sorting = true;
+        var step = 0;
+        var moving = false; 
+        var sortActivated = false;
+
+        function activateSort() {
+            sortActivated = true
+        }
+
+        function reset() {
+            instances = [];
+            sorting = true;
+            step = 0;
+            moving = false; 
+            sortActivated = false;
+
+            for (let i = 0; i < numInstances; i++) {
+                var scale = Math.random();
+                instances.push({
+                    size: scale,
+                    pos: -2 + i,
+                    targetPos: -2 + i
+                });
+            }
+        }
+
+        function sort() {
+            if (!sorting || moving) return;
+
+            if (step < instances.length - 1) {
+                if (instances[step].size > instances[step + 1].size) {
+
+                    let tempTarget = instances[step].targetPos;
+                    instances[step].targetPos = instances[step + 1].targetPos;
+                    instances[step + 1].targetPos = tempTarget;
+
+                    let tempInstance = instances[step];
+                    instances[step] = instances[step + 1];
+                    instances[step + 1] = tempInstance;
+
+                    moving = true;
+                }
+                step++;
+            } else {
+                step = 0;
+                let sorted = true;
+                for (let i = 0; i < instances.length - 1; i++) {
+                    if (instances[i].size > instances[i + 1].size) {
+                        sorted = false;
+                        break;
+                    }
+                }
+                if (sorted) sorting = false;
+            }
+        }
+
+        function updatePositions(){
+            const speed = 0.2;
+            moving = false;
+            for(let inst of instances){
+                inst.pos += (inst.targetPos - inst.pos) * speed;
+                if (Math.abs(inst.targetPos - inst.pos) > 0.001) moving = true;
+            }
+        }
+
+        // Dibujar la escena
+        var timeOld = 0;
+        var animate = function (time) {
+            var dt = time - timeOld;
+            timeOld = time;
+
+            gl.enable(gl.DEPTH_TEST);
+            gl.depthFunc(gl.LEQUAL);
+            gl.clearColor(0.5, 0.5, 0.5, 0.9);
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+            var projMatrix = mat4.create();
+            mat4.perspective(projMatrix, 40 * Math.PI / 180, canvas.width / canvas.height, 1, 100);
+            gl.uniformMatrix4fv(Pmatrix, false, projMatrix);
+
+            if(sortActivated) {
+                sort();
+                updatePositions();
+            }
+
+            for (let i = 0; i < instances.length; i++) {
+                let instance = instances[i];
+                var mv = mat4.create();
+                mat4.translate(mv, mv, [instance.pos/2, 0.0, -4.0]);
+                mat4.rotateZ(mv, mv, time * 0.001 * (0.5 + 0.2 * i));
+                mat4.scale(mv, mv, [instance.size, instance.size, instance.size]);
+                gl.uniformMatrix4fv(MVmatrix, false, mv);
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+                ext.drawElementsInstancedANGLE(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0, i + 1);
+            }
+
+            window.requestAnimationFrame(animate);
+        };
+        animate(0);
+    </script>
+</body>
+
+</html>
